@@ -15,6 +15,12 @@ HHグループ（阪急阪神HD）AI経営診断PoC ｜ モックアプリ（エ
 import os
 import sys
 
+# Windows の ProactorEventLoop は Gradio の非同期処理と衝突してフリーズする
+# SelectorEventLoop に戻すことで回避
+if sys.platform == "win32":
+    import asyncio
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 import pandas as pd
 import plotly.graph_objects as go
 import gradio as gr
@@ -40,7 +46,7 @@ def style_fig(fig, height, title):
     fig.update_layout(
         title=dict(text=title, font=dict(size=15, color=MAROON_DARK)),
         height=height, template="plotly_white",
-        font=dict(family="Noto Sans JP, sans-serif", color=INK, size=13),
+        font=dict(family="Noto Sans JP, Meiryo, Yu Gothic, sans-serif", color=INK, size=13),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         margin=dict(t=48, b=24, l=12, r=16),
         xaxis=dict(showgrid=False, zeroline=False),
@@ -206,7 +212,7 @@ def section(text):
 # 5. デザイン（CSS）とヘッダー
 # ===========================================================================
 CSS = """
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap');
+/* Google Fonts はネットワーク制限がある環境でブロックするため削除。システムフォントで代替 */
 :root { --hh-maroon:#6E2C3E; --hh-maroon-d:#4A1C27; --hh-ivory:#FAF8F5; --hh-ink:#211C1D; }
 /* ダークモード追従を打ち消し、常にライト（アイボリー）基調にするためGradio変数を上書き */
 :root, .dark {
@@ -227,7 +233,7 @@ CSS = """
 }
 input[type=radio], input[type=checkbox] { accent-color:#6E2C3E !important; }
 /* width:100% が無いとコンテナが中身の幅に縮み、タブごとに全体幅が変わる。全幅固定で統一 */
-.gradio-container { background:var(--hh-ivory) !important; font-family:'Noto Sans JP',sans-serif !important;
+.gradio-container { background:var(--hh-ivory) !important; font-family:'Noto Sans JP','Meiryo','Yu Gothic',sans-serif !important;
   color:var(--hh-ink); width:100% !important; max-width:1180px !important; margin:0 auto !important; }
 /* Gradioのfillableレイアウトが内側コンテンツを狭めるのを解除し、全タブを全幅で統一 */
 .gradio-container .main, .gradio-container .wrap, .gradio-container .contain,
@@ -404,7 +410,7 @@ with gr.Blocks(title="HHグループ AI経営診断PoC", fill_width=True) as dem
                                     value=D.ranked_issues()[0]["title"],
                                     label="深掘りする論点", visible=False, scale=2)
 
-            chatbot = gr.Chatbot(height=380, show_label=False, elem_classes="hh-card")
+            chatbot = gr.Chatbot(height=380, show_label=False, elem_classes="hh-card", type="messages")
             # サジェストは2種。モードに応じてどちらか一方を表示
             with gr.Row(elem_classes="hh-sug") as general_row:
                 general_sugs = [gr.Button(q, size="sm") for q in D.GENERAL_QUESTIONS]
@@ -461,7 +467,7 @@ with gr.Blocks(title="HHグループ AI経営診断PoC", fill_width=True) as dem
     # 経営サマリの「深掘り」→ 深掘りモードに切替え、その論点を選択してAIアシスタントへ遷移
     def open_assistant(it):
         q = f"「{it['title']}」について、なぜ重要か・連結への影響・打ち手の選択肢を比較して教えて。"
-        return (gr.Tabs(selected="assistant"), MODE_DEEP,
+        return (gr.update(selected="assistant"), MODE_DEEP,
                 gr.update(value=it["title"], visible=True),  # 論点を選択して表示
                 gr.update(visible=False), gr.update(visible=True), q)  # 一般→隠す／深掘り→出す
     for btn, it in deep_buttons:
