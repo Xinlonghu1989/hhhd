@@ -396,11 +396,17 @@ with gr.Blocks(title="HHグループ AI経営診断PoC", fill_width=True) as dem
                 with gr.Tab("波及構造"):
                     caption("起点となる要因から、影響を受ける事業・KPIの連鎖を構造化。")
                     factor = gr.Dropdown(list(D.PROPAGATION.keys()), value="金利上昇", label="起点要因")
-                    prop_plot = gr.Plot()
-                    prop_table = gr.Dataframe(wrap=True, interactive=False, elem_classes="hh-card")
-                    # 要因を選ぶたび／初回ロード時に波及図と表を更新（戻り値は df, fig の順）
+                    # [変更4] demo.load を廃止し、初期値をここで事前計算して埋め込む。
+                    # demo.load はページ読み込み時に WebSocket 経由でサーバーを呼び出す。
+                    # Windows では Gradio のセッション初期化が完了する前に呼び出しが
+                    # キューに積まれ、その処理中にタブをクリックすると UI がフリーズする。
+                    # 事前計算にすることで WebSocket 通信を初回完全に不要にする。
+                    _init_prop_table, _init_prop_plot = view_propagation("金利上昇")
+                    prop_plot = gr.Plot(value=_init_prop_plot)
+                    prop_table = gr.Dataframe(value=_init_prop_table, wrap=True,
+                                             interactive=False, elem_classes="hh-card")
+                    # 要因を選ぶたびに波及図と表を更新（戻り値は df, fig の順）
                     factor.change(view_propagation, factor, [prop_table, prop_plot])
-                    demo.load(view_propagation, factor, [prop_table, prop_plot])
                 with gr.Tab("根拠トレース"):
                     caption("各診断が参照した社内・公開データの出典一覧。横断要件として全機能に付与。")
                     gr.Dataframe(view_evidence(), wrap=True, interactive=False, elem_classes="hh-card")
