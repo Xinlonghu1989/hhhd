@@ -1,22 +1,24 @@
 # -*- coding: utf-8 -*-
 """
-HHグループ（阪急阪神HD）AI経営診断PoC ｜ モックアプリ（エントリポイント）
+HHグループ（阪急阪神HD）AI経営診断PoC ｜ モックアプリ（Windows 実行用）
 
-画面は2レイヤー構成：
-  定型レイヤー  … 経営サマリ（結論ファースト）／モニタリング／診断（毎回同じ固定フォーマット）
-  非定型レイヤー … AIアシスタント（OpenAI gpt-5-mini・RAG・出典付き）
-
-役割分担：
-  data.py      … 数値・論点・コーパス等のダミーデータと算出ロジック
-  assistant.py … AIアシスタントの応答（OpenAI呼び出し）
-  app.py       … 上記を画面に組み立てる（このファイル）
-※ 表示値はすべて架空のダミー。精度保証なし（PoC前提）。
+app.py との差分（3か所のみ）：
+  1. asyncio イベントループポリシーを SelectorEventLoop に変更
+     → Windows の ProactorEventLoop は Gradio/uvicorn と衝突してフリーズする
+  2. CSS の Google Fonts @import を削除（Windows 標準日本語フォントで代替）
+     → ネットワーク制限がある環境でブラウザの CSS 解析がブロックされてフリーズする
+  3. demo.launch の GoogleFont テーマを廃止
+     → 起動時に Google サーバーへ HTTP リクエストが飛んでタイムアウトする
+それ以外は app.py と完全に同一。
 """
 import os
 import sys
 
-# Windows の ProactorEventLoop は Gradio の非同期処理と衝突してフリーズする
-# SelectorEventLoop に戻すことで回避
+# -----------------------------------------------------------------------
+# [変更1] Windows の ProactorEventLoop は Gradio/uvicorn の非同期処理と
+# 衝突してフリーズするため、SelectorEventLoop に戻す。
+# Windows 以外では何も変わらない（sys.platform チェックで保護）。
+# -----------------------------------------------------------------------
 if sys.platform == "win32":
     import asyncio
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -46,7 +48,7 @@ def style_fig(fig, height, title):
     fig.update_layout(
         title=dict(text=title, font=dict(size=15, color=MAROON_DARK)),
         height=height, template="plotly_white",
-        font=dict(family="Noto Sans JP, Meiryo, Yu Gothic, sans-serif", color=INK, size=13),
+        font=dict(family="Noto Sans JP, sans-serif", color=INK, size=13),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         margin=dict(t=48, b=24, l=12, r=16),
         xaxis=dict(showgrid=False, zeroline=False),
@@ -211,8 +213,13 @@ def section(text):
 # ===========================================================================
 # 5. デザイン（CSS）とヘッダー
 # ===========================================================================
+# -----------------------------------------------------------------------
+# [変更2] Google Fonts の @import を削除。
+# Windows 環境でネットワーク制限がある場合、ブラウザが CSS ブロック全体の
+# 解析を待機してフリーズする。Windows 標準の日本語フォント（Meiryo / Yu Gothic）
+# をフォールバックに追加することで外部通信なしに日本語を表示する。
+# -----------------------------------------------------------------------
 CSS = """
-/* Google Fonts はネットワーク制限がある環境でブロックするため削除。システムフォントで代替 */
 :root { --hh-maroon:#6E2C3E; --hh-maroon-d:#4A1C27; --hh-ivory:#FAF8F5; --hh-ink:#211C1D; }
 /* ダークモード追従を打ち消し、常にライト（アイボリー）基調にするためGradio変数を上書き */
 :root, .dark {
@@ -233,7 +240,8 @@ CSS = """
 }
 input[type=radio], input[type=checkbox] { accent-color:#6E2C3E !important; }
 /* width:100% が無いとコンテナが中身の幅に縮み、タブごとに全体幅が変わる。全幅固定で統一 */
-.gradio-container { background:var(--hh-ivory) !important; font-family:'Noto Sans JP','Meiryo','Yu Gothic',sans-serif !important;
+.gradio-container { background:var(--hh-ivory) !important;
+  font-family:'Noto Sans JP','Meiryo','Yu Gothic UI','Yu Gothic',sans-serif !important;
   color:var(--hh-ink); width:100% !important; max-width:1180px !important; margin:0 auto !important; }
 /* Gradioのfillableレイアウトが内側コンテンツを狭めるのを解除し、全タブを全幅で統一 */
 .gradio-container .main, .gradio-container .wrap, .gradio-container .contain,
@@ -354,7 +362,7 @@ with gr.Blocks(title="HHグループ AI経営診断PoC", fill_width=True) as dem
 
         # ---- モニタリング（①気づく）----
         with gr.Tab("モニタリング", id="monitor"):
-            section("① 気づく　計画・前提・報告・議論の“ズレ／変化”を固定フォーマットで自動検知")
+            section("① 気づく　計画・前提・報告・議論の"ズレ／変化"を固定フォーマットで自動検知")
             with gr.Tabs():
                 with gr.Tab("計画 vs 実績"):
                     caption("セグメント別KPIの計画対比。乖離率 ±8% 超を要確認として強調。")
@@ -373,7 +381,7 @@ with gr.Blocks(title="HHグループ AI経営診断PoC", fill_width=True) as dem
 
         # ---- 診断（②見極める）----
         with gr.Tab("診断", id="diagnose"):
-            section("② 見極める　多数のズレから“どれが重要か・どこに効くか”を評価")
+            section("② 見極める　多数のズレから"どれが重要か・どこに効くか"を評価")
             with gr.Tabs():
                 with gr.Tab("重要度"):
                     caption("影響額・緊急度・横断性の3軸（固定式）でスコアリングし、順位付け。")
@@ -410,7 +418,7 @@ with gr.Blocks(title="HHグループ AI経営診断PoC", fill_width=True) as dem
                                     value=D.ranked_issues()[0]["title"],
                                     label="深掘りする論点", visible=False, scale=2)
 
-            chatbot = gr.Chatbot(height=380, show_label=False, elem_classes="hh-card", type="messages")
+            chatbot = gr.Chatbot(height=380, show_label=False, elem_classes="hh-card")
             # サジェストは2種。モードに応じてどちらか一方を表示
             with gr.Row(elem_classes="hh-sug") as general_row:
                 general_sugs = [gr.Button(q, size="sm") for q in D.GENERAL_QUESTIONS]
@@ -467,7 +475,7 @@ with gr.Blocks(title="HHグループ AI経営診断PoC", fill_width=True) as dem
     # 経営サマリの「深掘り」→ 深掘りモードに切替え、その論点を選択してAIアシスタントへ遷移
     def open_assistant(it):
         q = f"「{it['title']}」について、なぜ重要か・連結への影響・打ち手の選択肢を比較して教えて。"
-        return (gr.update(selected="assistant"), MODE_DEEP,
+        return (gr.Tabs(selected="assistant"), MODE_DEEP,
                 gr.update(value=it["title"], visible=True),  # 論点を選択して表示
                 gr.update(visible=False), gr.update(visible=True), q)  # 一般→隠す／深掘り→出す
     for btn, it in deep_buttons:
@@ -476,5 +484,14 @@ with gr.Blocks(title="HHグループ AI経営診断PoC", fill_width=True) as dem
 
 
 if __name__ == "__main__":
-    demo.launch(css=CSS, theme=gr.themes.Base(font=[gr.themes.GoogleFont("Noto Sans JP"), "sans-serif"]),
-                server_port=int(os.getenv("GRADIO_SERVER_PORT", "7862")), inbrowser=False)
+    # -----------------------------------------------------------------------
+    # [変更3] gr.themes.GoogleFont は起動時に Google サーバーへ HTTP リクエストを
+    # 送るため、ネットワーク制限のある Windows 環境でタイムアウトしてフリーズする。
+    # プレーン文字列に変えることで外部通信を完全に排除する。
+    # -----------------------------------------------------------------------
+    demo.launch(
+        css=CSS,
+        theme=gr.themes.Base(font=["Noto Sans JP", "Meiryo", "Yu Gothic UI", "sans-serif"]),
+        server_port=int(os.getenv("GRADIO_SERVER_PORT", "7862")),
+        inbrowser=False,
+    )
